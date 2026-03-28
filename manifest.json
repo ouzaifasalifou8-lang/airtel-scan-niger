@@ -1,0 +1,14 @@
+{
+  "short_name": "AirtelScan",
+  "name": "Airtel Niger Recharge Scanner",
+  "description": "Scan instantané de cartes de recharge Airtel.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "theme_color": "#ed1c24",
+  "background_color": "#121212",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
