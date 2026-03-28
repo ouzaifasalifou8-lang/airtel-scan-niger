@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Airtel Scan Niger</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#ed1c24">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <script src="https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js"></script>
+
+    <style>
+        :root { --airtel-red: #ed1c24; --dark: #121212; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--dark); color: white; margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; overflow-x: hidden; }
+        .header { background: var(--airtel-red); width: 100%; padding: 15px 0; text-align: center; font-weight: bold; font-size: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); }
+        
+        #video-container { position: relative; width: 90%; max-width: 400px; margin-top: 20px; border-radius: 15px; overflow: hidden; border: 2px solid #333; background: black; }
+        video { width: 100%; display: block; }
+        
+        /* Rectangle jaune de visée */
+        .scanner-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 85%; height: 60px; border: 2px solid yellow; box-shadow: 0 0 0 1000px rgba(0,0,0,0.6); pointer-events: none; }
+        .scanner-overlay::after { content: "PLACEZ LE CODE ICI"; position: absolute; top: -25px; left: 0; color: yellow; font-size: 10px; font-weight: bold; width: 100%; text-align: center; }
+
+        #status { margin: 15px; font-size: 14px; color: #bbb; text-align: center; height: 20px; }
+        #result-text { font-size: 32px; color: #ffd700; margin-top: 5px; font-weight: bold; letter-spacing: 3px; min-height: 40px; }
+
+        .controls { width: 85%; max-width: 350px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px; }
+        .btn { width: 100%; padding: 16px; border: none; border-radius: 12px; font-size: 16px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; text-decoration: none; }
+        .btn:active { transform: scale(0.98); }
+        
+        #torch-btn { background: #333; color: white; border: 1px solid #555; }
+        #capture-btn { background: white; color: black; }
+        #recharge-btn { background: var(--airtel-red); color: white; display: none; font-size: 18px; border: 2px solid white; }
+
+        .footer-legal { font-size: 10px; color: #666; margin-top: auto; padding: 10px; text-align: center; }
+    </style>
+</head>
+<body>
+
+    <div class="header">AIRTEL SCAN NIGER</div>
+
+    <div id="video-container">
+        <video id="video" autoplay playsinline></video>
+        <div class="scanner-overlay"></div>
+    </div>
+
+    <div id="status">Chargement de la caméra...</div>
+    <div id="result-text"></div>
+
+    <div class="controls">
+        <button id="torch-btn" class="btn">🔦 ALLUMER LA LAMPE</button>
+        <button id="capture-btn" class="btn">📸 SCANNER MAINTENANT</button>
+        <a id="recharge-btn" class="btn">🚀 RECHARGER MAINTENANT</a>
+    </div>
+
+    <div class="footer-legal">
+        Application non-officielle. Utilisation sous votre responsabilité.<br>
+        Développé par Ouzaif Tech.
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const captureBtn = document.getElementById('capture-btn');
+        const rechargeBtn = document.getElementById('recharge-btn');
+        const torchBtn = document.getElementById('torch-btn');
+        const status = document.getElementById('status');
+        const resultText = document.getElementById('result-text');
+
+        let videoStream;
+        let isTorchOn = false;
+
+        // 1. Initialiser la caméra
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+                });
+                videoStream = stream;
+                video.srcObject = stream;
+                status.innerText = "Prêt pour le scan";
+            } catch (err) {
+                status.innerText = "Erreur : Autorisez la caméra dans les réglages.";
+            }
+        }
+
+        // 2. Gestion de la Lampe Torche (Flash)
+        torchBtn.onclick = async () => {
+            if (!videoStream) return;
+            const track = videoStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+
+            if (!capabilities.torch) {
+                alert("Votre téléphone ne permet pas d'allumer la lampe depuis le navigateur.");
+                return;
+            }
+
+            isTorchOn = !isTorchOn;
+            try {
+                await track.applyConstraints({ advanced: [{ torch: isTorchOn }] });
+                torchBtn.innerHTML = isTorchOn ? "💡 ÉTEINDRE LA LAMPE" : "🔦 ALLUMER LA LAMPE";
+                torchBtn.style.background = isTorchOn ? "#555" : "#333";
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        // 3. Logique de Scan Ultra-Rapide
+        captureBtn.onclick = async () => {
+            status.innerText = "Analyse éclair...";
+            captureBtn.disabled = true;
+            captureBtn.style.opacity = "0.7";
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // On recadre pour ne scanner que le rectangle jaune
+            const scale = video.videoWidth / video.clientWidth;
+            const scanW = (video.clientWidth * 0.85) * scale;
+            const scanH = 60 * scale;
+            const startX = (video.videoWidth - scanW) / 2;
+            const startY = (video.videoHeight - scanH) / 2;
+
+            canvas.width = scanW;
+            canvas.height = scanH;
+            ctx.drawImage(video, startX, startY, scanW, scanH, 0, 0, scanW, scanH);
+
+            // Filtre Noir & Blanc pour booster l'OCR
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const gray = (data[i] + data[i+1] + data[i+2]) / 3;
+                const val = gray > 120 ? 255 : 0;
+                data[i] = data[i+1] = data[i+2] = val;
+            }
+            ctx.putImageData(imgData, 0, 0);
+
+            try {
+                const result = await Tesseract.recognize(canvas, 'eng', {
+                    tessedit_char_whitelist: '0123456789',
+                    tessdata_config: { tessedit_pageseg_mode: '7' }
+                });
+                
+                const digits = result.data.text.replace(/\D/g, '');
+                
+                if (digits.length >= 12) { // Les codes Airtel Niger font souvent 14-16 chiffres
+                    if ("vibrate" in navigator) navigator.vibrate(70);
+                    resultText.innerText = digits;
+                    rechargeBtn.href = `tel:*136*${digits}%23`;
+                    rechargeBtn.style.display = "flex";
+                    status.innerText = "Code détecté avec succès !";
+                } else {
+                    status.innerText = "Code incomplet. Rapprochez-vous.";
+                }
+            } catch (e) {
+                status.innerText = "Erreur. Réessayez.";
+            } finally {
+                captureBtn.disabled = false;
+                captureBtn.style.opacity = "1";
+            }
+        };
+
+        startCamera();
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
